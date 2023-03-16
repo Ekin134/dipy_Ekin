@@ -242,7 +242,7 @@ class MultiShellDeconvModel(shm.SphHarmModel):
         self.gtab = gtab
         self.B_dwi = B
         self.m = m
-        self.n = n
+        self.n = n - 9
         self.response = response
 
     def predict(self, params, gtab=None, S0=None):
