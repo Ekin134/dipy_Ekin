@@ -1575,3 +1575,32 @@ def convert_sh_to_legacy(sh_coeffs, sh_basis, full_basis=False):
         raise ValueError("Invalid basis name.")
 
     return out_sh_coeffs
+
+
+def angular_correlation(sh_coeffs_U, sh_coeffs_V):
+    """ Calculates angular correlation coefficients for each voxel.
+    Parameters
+    ----------
+    sh_coeffs_U: ndarray
+        Estimated SH coefficients.
+    sh_coeffs_V: ndarray
+        Ground truth SH coefficients.
+    Returns
+    -------
+    acc: ndarray
+        The array containing angular correlation coefficients(ACC). 
+    """
+
+    acc = np.zeros(sh_coeffs_U.shape[0:3])
+
+    for x in range(sh_coeffs_U.shape[0]):
+        for y in range(sh_coeffs_U.shape[1]):
+            for z in range(sh_coeffs_U.shape[2]):
+                dot = sh_coeffs_U[x,y,z,:] @ np.conjugate(sh_coeffs_V[x,y,z,:])
+                norm_U = np.sqrt(sh_coeffs_U[x,y,z,:] @ np.conjugate(sh_coeffs_U[x,y,z,:]))
+                norm_V = np.sqrt(sh_coeffs_V[x,y,z,:] @ np.conjugate(sh_coeffs_V[x,y,z,:]))
+                if norm_V == 0 or norm_U == 0:
+                    continue
+                else:
+                    acc[x,y,z] = dot/(norm_U*norm_V)
+    return acc
