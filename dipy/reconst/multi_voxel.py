@@ -32,7 +32,7 @@ def multi_voxel_fit(single_voxel_fit):
         bar = tqdm(total=np.sum(mask), position=0)
         for ijk in ndindex(data.shape[:-1]):
             if mask[ijk]:
-                fit_array[ijk] = single_voxel_fit(self, data[ijk])
+                fit_array[ijk] = single_voxel_fit(self, data[ijk], ijk)
                 bar.update()
         bar.close()
         return MultiVoxelFit(self, fit_array, mask)
