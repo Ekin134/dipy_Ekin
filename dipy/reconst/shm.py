@@ -1604,3 +1604,26 @@ def angular_correlation(sh_coeffs_U, sh_coeffs_V):
                 else:
                     acc[x,y,z] = dot/(norm_U*norm_V)
     return acc
+
+def mean_square_error(sh_coeffs_U, sh_coeffs_V):
+    """ Calculates the mean square error across the whole phantom. 
+    Parameters
+    ----------
+    sh_coeffs_U: ndarray
+        Estimated SH coefficients.
+    sh_coeffs_V: ndarray
+        Ground truth SH coefficients.
+    Returns
+    -------
+    mse: float
+    """
+    power_U = np.sqrt(np.sum(sh_coeffs_U[:,:,:,0]**2))
+    norm_U = sh_coeffs_U/power_U
+
+    power_V = np.sqrt(np.sum(sh_coeffs_V[:,:,:,0]**2))
+    norm_V = sh_coeffs_V/power_V
+
+    err = norm_U - norm_V
+    mse = np.sum(err**2)/np.size(err)
+    
+    return mse
