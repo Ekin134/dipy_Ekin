@@ -25,7 +25,7 @@ from dipy.direction.peaks import peaks_from_model
 from dipy.core.geometry import vec2vec_rotmat
 
 from dipy.utils.deprecator import deprecate_with_version, deprecated_params
-
+from qpsolvers import solve_qp
 
 @deprecate_with_version("dipy.reconst.csdeconv.auto_response is deprecated, "
                         "Please use "
@@ -297,8 +297,8 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         """ Alternative fit function for QP solver """
         from disco_script_ssst import sh_coeff, rho
         dwi_data = data[self._where_dwi]
-        slice_sh = sh_coeff[idx]
-        shm_coeff = csdeconv_qp(dwi_data, slice_sh, rho, self._X, self.B_reg, self.tau,
+        voxel_sh = sh_coeff[idx]
+        shm_coeff = csdeconv_qp(dwi_data, voxel_sh, rho, self._X, self.B_reg, self.tau,
                                 convergence=self.convergence, P=self._P)
         return SphHarmFit(self, shm_coeff, None)
     
@@ -710,6 +710,23 @@ def csdeconv(dwsignal, X, B_reg, tau=0.1, convergence=50, P=None):
         warnings.warn(msg)
 
     return fodf_sh, num_it
+
+def csdeconv_qp(dwsignal, voxel_sh, rho, X, B_reg, tau=0.1, convergence=50, P=None):
+    """ Constrained Spherical Deconvolution with quadprog solver from qpsolvers including modified version"""
+
+    B_reg = np.array(-B_reg)
+    h_mat = np.zeros(B_reg.shape[0])
+    """ if np.all(np.array(voxel_sh) == 0): #use standard version
+        Q = np.dot(X.T, dwsignal)
+        Q = np.array(-Q)
+        P = np.array(P)
+    else: #use modified version """
+    Q = np.dot(X.T, dwsignal) + np.dot((rho **2), np.transpose(voxel_sh))
+    Q = np.array(-Q)
+    P = np.dot(X.T, X) + np.dot((rho**2), np.identity(X.shape[1])) 
+        
+    x = solve_qp(P=P, q=Q, G=B_reg, h=h_mat, solver='quadprog')
+    return x
 
 
 def odf_deconv(odf_sh, R, B_reg, lambda_=1., tau=0.1, r2_term=False):
