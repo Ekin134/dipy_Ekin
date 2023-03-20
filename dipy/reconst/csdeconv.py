@@ -286,12 +286,22 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         self._P = np.dot(X.T, X)
 
     @multi_voxel_fit
-    def fit(self, data):
+    def fit(self, data, idx):
         dwi_data = data[self._where_dwi]
         shm_coeff, _ = csdeconv(dwi_data, self._X, self.B_reg, self.tau,
                                 convergence=self.convergence, P=self._P)
         return SphHarmFit(self, shm_coeff, None)
 
+    @multi_voxel_fit
+    def fit_qp(self, data, idx):
+        """ Alternative fit function for QP solver """
+        from disco_script_ssst import sh_coeff, rho
+        dwi_data = data[self._where_dwi]
+        slice_sh = sh_coeff[idx]
+        shm_coeff = csdeconv_qp(dwi_data, slice_sh, rho, self._X, self.B_reg, self.tau,
+                                convergence=self.convergence, P=self._P)
+        return SphHarmFit(self, shm_coeff, None)
+    
     def predict(self, sh_coeff, gtab=None, S0=1.):
         """Compute a signal prediction given spherical harmonic coefficients
         for the provided GradientTable class instance.
