@@ -11,7 +11,7 @@ from dipy.reconst.csdeconv import (response_from_mask_ssst)
 from dipy.sims.voxel import single_tensor_odf
 from dipy.reconst.csdeconv import ConstrainedSphericalDeconvModel
 from dipy.data import get_sphere
-
+from dipy.sims.phantom import add_noise
 
 def average(sh_coeffs):
     "Averaging local neighbourhood around a central voxel in a cubic patch."
