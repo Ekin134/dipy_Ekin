@@ -23,12 +23,14 @@ def average(sh_coeffs):
     for a in range(x):
         for b in range(y):
             for c in range(z):
-                average_sh_coeff[a,b,c,:] = (K[a+1,b,c,:]+K[a+1,b+1,c,:]+K[a+1, b+2,c,:]+K[a+1,b,c+1,:]\
-                    +K[a+1,b+1,c+1,:]+K[a+1,b+2,c+1,:]+K[a+1,b,c+2,:]+K[a+1,b+1,c+2,:]+K[a+1,b+2,c+2,:]\
-                        +K[a,b+1,c,:]+K[a+2,b+1,c,:]+K[a,b+1,c+1,:]+K[a+2,b+1,c+1,:]+K[a,b+1,c+2,:]\
-                            +K[a+2,b+1,c+2,:]+K[a+2,b+2,c+1,:]+K[a+2,b,c+1,:]+K[a,b+2,c+1,:]+K[a,b,c+1,:]\
-                                +K[a+2,b+2,c+2,:]+K[a+2,b+2,c,:]+K[a,b+2,c+2,:]+K[a,b+2,c,:]+K[a+2,b,c+2,:]\
-                                    +K[a+2,b,c,:]+K[a,b,c+2,:]+K[a,b,c,:])/27
+                neighbourhood = np.array([K[a+1,b,c,:],K[a+1,b+1,c,:],K[a+1, b+2,c,:],K[a+1,b,c+1,:]\
+                    ,K[a+1,b+1,c+1,:],K[a+1,b+2,c+1,:],K[a+1,b,c+2,:],K[a+1,b+1,c+2,:],K[a+1,b+2,c+2,:]\
+                        ,K[a,b+1,c,:],K[a+2,b+1,c,:],K[a,b+1,c+1,:],K[a+2,b+1,c+1,:],K[a,b+1,c+2,:]\
+                            ,K[a+2,b+1,c+2,:],K[a+2,b+2,c+1,:],K[a+2,b,c+1,:],K[a,b+2,c+1,:],K[a,b,c+1,:]\
+                                ,K[a+2,b+2,c+2,:],K[a+2,b+2,c,:],K[a,b+2,c+2,:],K[a,b+2,c,:],K[a+2,b,c+2,:]\
+                                    ,K[a+2,b,c,:],K[a,b,c+2,:],K[a,b,c,:]])
+                
+                average_sh_coeff[a,b,c,:] = np.sum(neighbourhood, 0)/ np.count_nonzero(neighbourhood[:,0])
                 
     return average_sh_coeff
 
@@ -63,7 +65,7 @@ scene.rm(response_actor) """
 #set global variables
 global rho
 global sh_coeff
-rho = 10
+rho = 1
 """ sh_coeff = np.array([0]) """
 
 #fODF reconstruction
@@ -76,8 +78,8 @@ from shm import mean_square_error, angular_correlation
 ground_sh, _ = load_nifti(r"/home/ekin/Documents&code/datasets/disco1_ekin/DiSCo1_Strand_ODFs.nii.gz")
 ground_sh = ground_sh[:,:,:,0:sh_coeff.shape[3]]
 
-mse_conventional = mean_square_error(sh_coeff, ground_sh)
-acc_conventional = angular_correlation(sh_coeff, ground_sh)
+mse_conventional = mean_square_error(sh_coeff, ground_sh, mask)
+acc_conventional = angular_correlation(sh_coeff, ground_sh, mask)
 
 sh_coeff = average(sh_coeff)
 csd_model2 = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
@@ -85,8 +87,8 @@ csd_fit2 = csd_model2.fit_qp(data)
 print("Checkpoint-2")
 new_sh_coeff = csd_fit2.shm_coeff
 
-mse_modified = mean_square_error(new_sh_coeff, ground_sh)
-acc_modified = angular_correlation(new_sh_coeff, ground_sh)
+mse_modified = mean_square_error(new_sh_coeff, ground_sh, mask)
+acc_modified = angular_correlation(new_sh_coeff, ground_sh, mask)
 
 """ csd_odf = csd_fit.odf(sphere)
 fodf_spheres = actor.odf_slicer(csd_odf[:,:,16:17,:], sphere=sphere, scale=1,
@@ -99,8 +101,8 @@ window.show(scene) """
 print("Conventional SH MSE: " , mse_conventional)
 print("Modified SH MSE: " , mse_modified)
 
-print("Conventional SH ACC: " , np.mean(acc_conventional))
-print("Modified SH ACC: " , np.mean(acc_modified))
+print("Conventional SH ACC: " , acc_conventional)
+print("Modified SH ACC: " , acc_modified)
 
 
 
