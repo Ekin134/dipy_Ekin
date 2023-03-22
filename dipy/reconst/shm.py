@@ -1603,7 +1603,10 @@ def angular_correlation(sh_coeffs_U, sh_coeffs_V, mask):
                     continue
                 else:
                     acc[x,y,z] = dot/(norm_U*norm_V)
-    return acc
+
+    masked_acc = mask * acc 
+    mean_acc = masked_acc[np.nonzero(masked_acc)].mean()
+    return mean_acc
 
 def mean_square_error(sh_coeffs_U, sh_coeffs_V, mask):
     """ Calculates the mean square error across the whole phantom. 
