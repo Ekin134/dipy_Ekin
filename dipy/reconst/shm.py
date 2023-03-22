@@ -1577,7 +1577,7 @@ def convert_sh_to_legacy(sh_coeffs, sh_basis, full_basis=False):
     return out_sh_coeffs
 
 
-def angular_correlation(sh_coeffs_U, sh_coeffs_V):
+def angular_correlation(sh_coeffs_U, sh_coeffs_V, mask):
     """ Calculates angular correlation coefficients for each voxel.
     Parameters
     ----------
@@ -1605,7 +1605,7 @@ def angular_correlation(sh_coeffs_U, sh_coeffs_V):
                     acc[x,y,z] = dot/(norm_U*norm_V)
     return acc
 
-def mean_square_error(sh_coeffs_U, sh_coeffs_V):
+def mean_square_error(sh_coeffs_U, sh_coeffs_V, mask):
     """ Calculates the mean square error across the whole phantom. 
     Parameters
     ----------
@@ -1617,13 +1617,27 @@ def mean_square_error(sh_coeffs_U, sh_coeffs_V):
     -------
     mse: float
     """
-    power_U = np.sqrt(np.sum(sh_coeffs_U[:,:,:,0]**2))
-    norm_U = sh_coeffs_U/power_U
+    masked_sh_coeffs_U = np.zeros(sh_coeffs_U.shape)
+    masked_sh_coeffs_V = np.zeros(sh_coeffs_V.shape)
+    norm_sh_coeffs_U = np.zeros(sh_coeffs_U.shape)
+    norm_sh_coeffs_V = np.zeros(sh_coeffs_V.shape)
 
-    power_V = np.sqrt(np.sum(sh_coeffs_V[:,:,:,0]**2))
-    norm_V = sh_coeffs_V/power_V
+    for i in range(sh_coeffs_U.shape[3]):
+        masked_sh_coeffs_U[:,:,:,i] = mask * sh_coeffs_U[:,:,:,i]
+        masked_sh_coeffs_V[:,:,:,i] = mask * sh_coeffs_V[:,:,:,i]
 
-    err = norm_U - norm_V
-    mse = np.sum(err**2)/np.size(err)
+    number_of_voxels = np.sum(mask)
+    for x in range(sh_coeffs_U.shape[0]):
+        for y in range(sh_coeffs_U.shape[1]):
+            for z in range(sh_coeffs_U.shape[2]):
+                energy_U = np.sqrt(np.sum(masked_sh_coeffs_U[x,y,z,:]**2))
+                energy_V = np.sqrt(np.sum(masked_sh_coeffs_V[x,y,z,:]**2))
+                if energy_U != 0:
+                    norm_sh_coeffs_U[x,y,z,:] = masked_sh_coeffs_U[x,y,z,:]/energy_U
+                if energy_V != 0:
+                    norm_sh_coeffs_V[x,y,z,:] = masked_sh_coeffs_V[x,y,z,:]/energy_V
+
+    err = norm_sh_coeffs_U - norm_sh_coeffs_V
+    mse = np.sum(err**2)/number_of_voxels
     
     return mse
