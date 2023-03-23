@@ -62,12 +62,7 @@ scene.add(response_actor)
 window.show(scene)
 scene.rm(response_actor) """
 
-#set global variables
-global rho
-global sh_coeff
 rho = 1
-""" sh_coeff = np.array([0]) """
-
 #fODF reconstruction
 csd_model = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
 csd_fit = csd_model.fit(data)
@@ -83,6 +78,11 @@ acc_conventional = angular_correlation(sh_coeff, ground_sh, mask)
 
 sh_coeff = average(sh_coeff)
 csd_model2 = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
+
+csd_model2.sh_coeff = sh_coeff
+csd_model2.rho = rho
+
+
 csd_fit2 = csd_model2.fit_qp(data)
 print("Checkpoint-2")
 new_sh_coeff = csd_fit2.shm_coeff
