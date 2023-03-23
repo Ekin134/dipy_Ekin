@@ -12,6 +12,12 @@ from dipy.sims.voxel import single_tensor_odf
 from dipy.reconst.csdeconv import ConstrainedSphericalDeconvModel
 from dipy.data import get_sphere
 from dipy.sims.phantom import add_noise
+from skimage.restoration import (calibrate_denoiser,
+                                 denoise_tv_chambolle,
+                                 denoise_bilateral,
+                                 denoise_wavelet,
+                                 estimate_sigma,
+                                 denoise_nl_means)
 
 def average(sh_coeffs):
     "Averaging local neighbourhood around a central voxel in a cubic patch."
@@ -76,12 +82,16 @@ ground_sh = ground_sh[:,:,:,0:sh_coeff.shape[3]]
 mse_conventional = mean_square_error(sh_coeff, ground_sh, mask)
 acc_conventional = angular_correlation(sh_coeff, ground_sh, mask)
 
-sh_coeff = average(sh_coeff)
-csd_model2 = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
+#SH coefficients denoising
+#sh_coeff = average(sh_coeff)
+for voxelt in range(sh_coeff.shape[3]):
+    data_vol  = np.squeeze(sh_coeff[:,:,:,voxelt])
+    sigma_est = np.mean(estimate_sigma(data_vol, channel_axis=None))
+    sh_coeff[:,:,:,voxelt] = denoise_tv_chambolle(data_vol, weight=1.0*sigma_est, eps=0.0002, max_num_iter=200, channel_axis=None)
 
+csd_model2 = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
 csd_model2.sh_coeff = sh_coeff
 csd_model2.rho = rho
-
 
 csd_fit2 = csd_model2.fit_qp(data)
 print("Checkpoint-2")
