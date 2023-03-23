@@ -210,6 +210,8 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         convergence : int
             Maximum number of iterations to allow the deconvolution to
             converge.
+        sh_coeff : estimated SH coefficients to be used on the modified CSD method
+        rho : weight of the regularization to be used in the modified CSD method
 
         References
         ----------
@@ -231,6 +233,8 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         self.m, self.n = m, n
         self._where_b0s = lazy_index(gtab.b0s_mask)
         self._where_dwi = lazy_index(~gtab.b0s_mask)
+        self.sh_coeff = None
+        self.rho = None
 
         no_params = ((sh_order + 1) * (sh_order + 2)) / 2
 
@@ -294,11 +298,10 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
 
     @multi_voxel_fit
     def fit_qp(self, data, idx):
-        """ Alternative fit function for QP solver """
-        from disco_script_ssst import sh_coeff, rho
+        """ Alternative fit function for QP solver """    
         dwi_data = data[self._where_dwi]
-        voxel_sh = sh_coeff[idx]
-        shm_coeff = csdeconv_qp(dwi_data, voxel_sh, rho, self._X, self.B_reg, self.tau,
+        voxel_sh = self.sh_coeff[idx]
+        shm_coeff = csdeconv_qp(dwi_data, voxel_sh, self.rho, self._X, self.B_reg, self.tau,
                                 convergence=self.convergence, P=self._P)
         return SphHarmFit(self, shm_coeff, None)
     
