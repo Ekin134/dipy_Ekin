@@ -724,9 +724,12 @@ def csdeconv_qp(dwsignal, voxel_sh, rho, X, B_reg, tau=0.1, convergence=50, P=No
         Q = np.array(-Q)
         P = np.array(P)
     else: #use modified version """
-    Q = np.dot(X.T, dwsignal) + np.dot((rho **2), np.transpose(voxel_sh))
-    Q = np.array(-Q)
-    P = np.dot(X.T, X) + np.dot((rho**2), np.identity(X.shape[1])) 
+    max_X = np.amax(X)
+    new_rho = rho*max_X 
+    #new_rho = rho
+    Q = np.dot(X.T, dwsignal) + np.dot((new_rho **2), np.transpose(voxel_sh))
+    Q = np.array(-Q)  
+    P = np.dot(X.T, X) + np.dot((new_rho**2), np.identity(X.shape[1])) 
         
     x = solve_qp(P=P, q=Q, G=B_reg, h=h_mat, solver='quadprog')
     return x
