@@ -50,6 +50,9 @@ bvals, bvecs = read_bvals_bvecs(r"/home/ekin/Documents&code/datasets/disco1_ekin
 mask, affine = load_nifti(r"/home/ekin/Documents&code/datasets/disco1_ekin/DiSCo1_mask.nii.gz")
 gtab = gradient_table(bvals, bvecs)
 
+#add noise 
+data = add_noise(data, snr=10, noise_type='rician')
+
 #denoising 
 #denoised_data = mppca(data, mask=mask, patch_radius=2)
 
@@ -75,19 +78,26 @@ csd_fit = csd_model.fit(data)
 print("Checkpoint-1")
 sh_coeff = csd_fit.shm_coeff
 
+#convert estimated odfs to Tournier basis
+from basis_conversion import convert_to_mrtrix
+order_sh = 8
+conversion_matrix = convert_to_mrtrix(order_sh)
+tournier_sh_coeff = np.dot(sh_coeff, conversion_matrix.T)
+
 from shm import mean_square_error, angular_correlation
 ground_sh, _ = load_nifti(r"/home/ekin/Documents&code/datasets/disco1_ekin/DiSCo1_Strand_ODFs.nii.gz")
 ground_sh = ground_sh[:,:,:,0:sh_coeff.shape[3]]
 
-mse_conventional = mean_square_error(sh_coeff, ground_sh, mask)
-acc_conventional = angular_correlation(sh_coeff, ground_sh, mask)
+mse_conventional = mean_square_error(tournier_sh_coeff, ground_sh, mask)
+acc_conventional = angular_correlation(tournier_sh_coeff, ground_sh, mask)
 
 #SH coefficients denoising
-#sh_coeff = average(sh_coeff)
-for voxelt in range(sh_coeff.shape[3]):
+sh_coeff = average(sh_coeff)
+""" for voxelt in range(sh_coeff.shape[3]):
     data_vol  = np.squeeze(sh_coeff[:,:,:,voxelt])
     sigma_est = np.mean(estimate_sigma(data_vol, channel_axis=None))
-    sh_coeff[:,:,:,voxelt] = denoise_tv_chambolle(data_vol, weight=1.0*sigma_est, eps=0.0002, max_num_iter=200, channel_axis=None)
+    print("Sigma Estimated: ", sigma_est)
+    sh_coeff[:,:,:,voxelt] = denoise_tv_chambolle(data_vol, weight=1.0*sigma_est, eps=0.0002, max_num_iter=200, channel_axis=None) """
 
 csd_model2 = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
 csd_model2.sh_coeff = sh_coeff
@@ -97,8 +107,12 @@ csd_fit2 = csd_model2.fit_qp(data)
 print("Checkpoint-2")
 new_sh_coeff = csd_fit2.shm_coeff
 
-mse_modified = mean_square_error(new_sh_coeff, ground_sh, mask)
-acc_modified = angular_correlation(new_sh_coeff, ground_sh, mask)
+#convert estimated odfs to Tournier basis
+conversion_matrix = convert_to_mrtrix(order_sh)
+tournier_new_sh_coeff = np.dot(new_sh_coeff, conversion_matrix.T)
+
+mse_modified = mean_square_error(tournier_new_sh_coeff, ground_sh, mask)
+acc_modified = angular_correlation(tournier_new_sh_coeff, ground_sh, mask)
 
 """ csd_odf = csd_fit.odf(sphere)
 fodf_spheres = actor.odf_slicer(csd_odf[:,:,16:17,:], sphere=sphere, scale=1,
