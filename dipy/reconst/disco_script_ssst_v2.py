@@ -76,6 +76,19 @@ ground_sh = ground_sh[:,:,:,0:sh_coeff.shape[3]]
 mse_conventional = mean_square_error(tournier_sh_coeff, ground_sh, mask)
 acc_conventional = angular_correlation(tournier_sh_coeff, ground_sh, mask)
 
+from angular_error import get_angular_error
+i=0
+ang_err_conventional = np.zeros([sh_coeff.shape[0], sh_coeff.shape[1], sh_coeff.shape[2]])
+for x in range(sh_coeff.shape[0]):
+    for y in range(sh_coeff.shape[1]):
+        for z in range(sh_coeff.shape[2]):
+            i=i+1
+            print("Processing voxel ", i)
+            if mask[x,y,z] == 0:
+                continue
+            else:
+                ang_err_conventional[x,y,z] = get_angular_error(ground_sh[x,y,z,:], tournier_sh_coeff[x,y,z,:], order_sh)
+
 #SH coefficients denoising
 #sh_coeff = average(sh_coeff)
 for voxelt in range(sh_coeff.shape[3]):
@@ -112,11 +125,24 @@ new_sh_coeff = csd_fit2.shm_coeff
 conversion_matrix = convert_to_mrtrix(order_sh)
 tournier_new_sh_coeff = np.dot(new_sh_coeff, conversion_matrix.T)
 
-fods_img = nib.Nifti1Image(tournier_new_sh_coeff, affine)
-nib.save(fods_img, "tv_reg_rho1.nii.gz")
+ang_err_modified = np.zeros([sh_coeff.shape[0], sh_coeff.shape[1], sh_coeff.shape[2]])
+i=0
+for x in range(sh_coeff.shape[0]):
+    for y in range(sh_coeff.shape[1]):
+        for z in range(sh_coeff.shape[2]):
+            i=i+1
+            print("Processing voxel ", i)
+            if mask[x,y,z] == 0:
+                continue
+            else:
+                ang_err_modified[x,y,z] = get_angular_error(ground_sh[x,y,z,:], tournier_new_sh_coeff[x,y,z,:], order_sh)
+
+""" fods_img = nib.Nifti1Image(tournier_new_sh_coeff, affine)
+nib.save(fods_img, "new_rho1.nii.gz") """
 
 mse_modified = mean_square_error(tournier_new_sh_coeff, ground_sh, mask)
 acc_modified = angular_correlation(tournier_new_sh_coeff, ground_sh, mask)
+#ang_err_modified = get_angular_error(ground_sh, tournier_new_sh_coeff, order_sh)
 
 """ csd_odf = csd_fit.odf(sphere)
 fodf_spheres = actor.odf_slicer(csd_odf[:,:,16:17,:], sphere=sphere, scale=1,
@@ -128,9 +154,10 @@ window.show(scene) """
 
 print("MSE: " , mse_conventional)
 print("Regularized MSE: " , mse_modified)
+#print("Ang. Err.: ", ang_err_conventional)
 
 print("ACC: " , acc_conventional)
 print("Regularized ACC: " , acc_modified)
-
+#print("Ang. Err.: ", ang_err_modified)
 
 
