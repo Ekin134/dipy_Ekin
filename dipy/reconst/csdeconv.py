@@ -290,14 +290,14 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         self._P = np.dot(X.T, X)
 
     @multi_voxel_fit
-    def fit(self, data, idx):
+    def fit(self, data, idx, verbose):
         dwi_data = data[self._where_dwi]
-        shm_coeff, _ = csdeconv(dwi_data, self._X, self.B_reg, self.tau,
+        shm_coeff = csdeconv(dwi_data, self._X, self.B_reg, self.tau,
                                 convergence=self.convergence, P=self._P)
         return SphHarmFit(self, shm_coeff, None)
 
     @multi_voxel_fit
-    def fit_qp(self, data, idx):
+    def fit_qp(self, data, idx, verbose):
         """ Alternative fit function for QP solver """    
         dwi_data = data[self._where_dwi]
         voxel_sh = self.sh_coeff[idx]
@@ -659,8 +659,8 @@ def csdeconv(dwsignal, X, B_reg, tau=0.1, convergence=50, P=None):
     .. [1] Tournier, J.D., et al. NeuroImage 2007. Robust determination of the
            fibre orientation distribution in diffusion MRI: Non-negativity
            constrained super-resolved spherical deconvolution.
-
-    """
+    
+    
     mu = 1e-5
     if P is None:
         P = np.dot(X.T, X)
@@ -713,17 +713,24 @@ def csdeconv(dwsignal, X, B_reg, tau=0.1, convergence=50, P=None):
         warnings.warn(msg)
 
     return fodf_sh, num_it
-
+    
+    """
+    mu = 1e-5
+    B_reg = np.array(-B_reg)
+    h_mat = np.zeros(B_reg.shape[0])
+    Q = np.dot(X.T, dwsignal)
+    Q = np.array(-Q)
+    P = np.array(P)  
+    P = P + mu * np.eye(P.shape[0])
+    x = solve_qp(P=P, q=Q, G=B_reg, h=h_mat, solver='quadprog')
+    
+    return x
+    
 def csdeconv_qp(dwsignal, voxel_sh, rho, X, B_reg, tau=0.1, convergence=50, P=None):
     """ Constrained Spherical Deconvolution with quadprog solver from qpsolvers including modified version"""
 
     B_reg = np.array(-B_reg)
     h_mat = np.zeros(B_reg.shape[0])
-    """ if np.all(np.array(voxel_sh) == 0): #use standard version
-        Q = np.dot(X.T, dwsignal)
-        Q = np.array(-Q)
-        P = np.array(P)
-    else: #use modified version """
     max_X = np.amax(X)
     new_rho = rho*max_X 
     #new_rho = rho
@@ -979,6 +986,7 @@ def mask_for_response_ssst(gtab, data, roi_center=None, roi_radii=10,
     fa[np.isnan(fa)] = 0
 
     mask = np.zeros(fa.shape, dtype=np.int64)
+    #fa_thr = 0.84 * np.amax(fa)
     mask[fa > fa_thr] = 1
 
     if np.sum(mask) == 0:
