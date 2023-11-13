@@ -17,7 +17,8 @@ from dipy.reconst.utils import _roi_in_volume, _mask_from_roi
 from dipy.sims.voxel import single_tensor
 
 from dipy.utils.optpkg import optional_package
-cvxpy, have_cvxpy, _ = optional_package("cvxpy")
+#cvxpy, have_cvxpy, _ = optional_package("cvxpy")
+from qpsolvers import solve_qp
 
 SH_CONST = .5 / np.sqrt(np.pi)
 
@@ -234,17 +235,25 @@ class MultiShellDeconvModel(shm.SphHarmModel):
         reg[iso:, iso:] = odf_reg
 
         X = B * multiplier_matrix
-
-        self.fitter = QpFitter(X, reg)
+        scale = np.amax(np.abs(X))
+        X = X/scale
+        self.scale = scale
+        self.fitter = QpFitter(X, reg, scale)
+        self.fitter_qp = QpFitter_qp(X, reg, scale)
         self.sh_order = sh_order
         self._X = X
         self.sphere = reg_sphere
         self.gtab = gtab
         self.B_dwi = B
         self.m = m
-        self.n = n - 9
+        self.n = n 
         self.response = response
-
+        self.wm_sh_coeff = None
+        self.gm_sh_coeff = None
+        self.csf_sh_coeff = None
+        self.rho = None
+        self.B_reg = reg
+        
     def predict(self, params, gtab=None, S0=None):
         """Compute a signal prediction given spherical harmonic coefficients
         for the provided GradientTable class instance.
@@ -288,7 +297,7 @@ class MultiShellDeconvModel(shm.SphHarmModel):
         return pred_sig
 
     @multi_voxel_fit
-    def fit(self, data, verbose=True):
+    def fit(self, data, idx, verbose = True):
         """Fits the model to diffusion data and returns the model fit.
 
         Sometimes the solving process of some voxels can end in a SolverError
@@ -308,13 +317,49 @@ class MultiShellDeconvModel(shm.SphHarmModel):
             Default: True
         """
         coeff = self.fitter(data)
+        
         if verbose:
             if np.isnan(coeff[..., 0]):
                 msg = """Voxel could not be solved properly and ended up with a
                 SolverError. Proceeding to fill it with NaN values.
                 """
                 warnings.warn(msg, UserWarning)
+        
+        return MSDeconvFit(self, coeff, None)
+    
+    @multi_voxel_fit
+    def fit_qp(self, data, idx, verbose = True):
+        """Fits the model to diffusion data and returns the model fit.
 
+        Sometimes the solving process of some voxels can end in a SolverError
+        from cvxpy. This might be attributed to the response functions not
+        being tuned properly, as the solving process is very sensitive to it.
+        The method will fill the problematic voxels with a NaN value, so that
+        it is traceable. The user should check for the number of NaN values and
+        could then fill the problematic voxels with zeros, for example.
+        Running a fit again only on those problematic voxels can also work.
+
+        Parameters
+        ----------
+        data : ndarray
+            The diffusion data to fit the model on.
+        verbose : bool (optional)
+            Whether to show warnings when a SolverError appears or not.
+            Default: True
+        """
+        self.csf_sh_coeff = np.asarray(self.csf_sh_coeff).reshape((self.csf_sh_coeff.shape[0],self.csf_sh_coeff.shape[1],self.csf_sh_coeff.shape[2],1))
+        self.gm_sh_coeff = np.asarray(self.gm_sh_coeff).reshape((self.gm_sh_coeff.shape[0],self.gm_sh_coeff.shape[1],self.gm_sh_coeff.shape[2],1))
+        all_sh = np.concatenate((self.csf_sh_coeff, self.gm_sh_coeff, self.wm_sh_coeff), axis=-1)
+        rho = self.rho
+        coeff = self.fitter_qp(data, idx, all_sh, rho)
+        
+        if verbose:
+            if np.isnan(coeff[..., 0]):
+                msg = """Voxel could not be solved properly and ended up with a
+                SolverError. Proceeding to fill it with NaN values.
+                """
+                warnings.warn(msg, UserWarning)
+        
         return MSDeconvFit(self, coeff, None)
 
 
@@ -353,7 +398,20 @@ class MSDeconvFit(shm.SphHarmFit):
         return self._shm_coef[..., :tissue_classes] / SH_CONST
 
 
-def solve_qp(P, Q, G, H):
+def solve_qp_old(P, Q, G, H):
+    x = solve_qp(P=P, q=Q, G=G, h=H, solver='quadprog')
+    
+    if x is None:
+        opt = np.empty((Q.shape[0],))
+        opt[:] = np.NaN
+        x=opt
+
+    else:
+        x=x.reshape((Q.shape[0],))
+
+    return x
+    
+
     r"""
     Helper function to set up and solve the Quadratic Program (QP) in CVXPY.
     A QP problem has the following form:
@@ -377,7 +435,7 @@ def solve_qp(P, Q, G, H):
     -------
     x : array
         Optimal solution to the QP problem.
-    """
+    
     x = cvxpy.Variable(Q.shape[0])
     P = cvxpy.Constant(P)
     if Version(cvxpy.__version__) < Version('1.1'):
@@ -397,11 +455,17 @@ def solve_qp(P, Q, G, H):
         opt[:] = np.NaN
 
     return opt
+    """
+    
+
+    
+
+
 
 
 class QpFitter(object):
 
-    def __init__(self, X, reg):
+    def __init__(self, X, reg, scale):
         r"""
         Makes use of the quadratic programming solver `solve_qp` to fit the
         model. The initialization for the model is done using the warm-start by
@@ -419,14 +483,54 @@ class QpFitter(object):
         self._X = X
 
         self._reg = reg
-        self._P_mat = np.array(P)
+        self._P_mat = np.array(P) 
         self._reg_mat = np.array(-reg)
-        self._h_mat = np.array([0])
+        #self._h_mat = np.array([0])
+        self._h_mat = np.zeros(reg.shape[0])
+        self.scale = scale
+
 
     def __call__(self, signal):
         Q = np.dot(self._X.T, signal)
         Q_mat = np.array(-Q)
-        fodf_sh = solve_qp(self._P_mat, Q_mat, self._reg_mat, self._h_mat)
+        fodf_sh = solve_qp_old(self._P_mat, Q_mat, self._reg_mat, self._h_mat)
+        fodf_sh = fodf_sh/self.scale
+        return fodf_sh
+    
+class QpFitter_qp(object):
+
+    def __init__(self, X, reg, scale):
+        r"""
+        Makes use of the quadratic programming solver `solve_qp` to fit the
+        model. The initialization for the model is done using the warm-start by
+        default in `CVXPY`.
+
+        Parameters
+        ----------
+        X : ndarray
+            Matrix to be fit by the QP solver calculated in
+            `MultiShellDeconvModel`
+        reg : ndarray
+            the regularization B matrix calculated in `MultiShellDeconvModel`
+        """
+        self._P = P = np.dot(X.T, X)
+        self._X = X
+        self._reg = reg
+        self._P_mat = np.array(P) 
+        self._reg_mat = np.array(-reg)
+        self._h_mat = np.zeros(reg.shape[0])
+        self.scale = scale
+
+
+    def __call__(self, signal, idx, all_sh, rho):
+        all_sh = all_sh*self.scale
+        voxel_sh = all_sh[idx] 
+        new_rho = rho
+        Q = np.dot(self._X.T, signal) + np.dot((new_rho **2), np.transpose(voxel_sh))
+        Q_mat = np.array(-Q)
+        new_P = self._P_mat + + np.dot((new_rho**2), np.identity(self._X.shape[1])) 
+        fodf_sh = solve_qp_old(new_P, Q_mat, self._reg_mat, self._h_mat)
+        fodf_sh = fodf_sh/self.scale
         return fodf_sh
 
 
