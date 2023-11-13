@@ -44,11 +44,12 @@ def average(sh_coeffs):
 sphere = get_sphere('symmetric724')
 
 #load data, bvals, bvecs and mask. Create gradient table
-data, affine = load_nifti(r"/home/ekin/Documents&code/Noisy Disco Data/snr15/data_snr15.nii.gz")
-bvals, bvecs = read_bvals_bvecs(r"/home/ekin/Documents&code/datasets/disco1_ekin/1_shell/DiSCo_1_shell.bvals", r"/home/ekin/Documents&code/datasets/disco1_ekin/1_shell/DiSCo_1_shell.bvecs")
-mask, affine = load_nifti(r"/home/ekin/Documents&code/datasets/disco1_ekin/DiSCo1_mask.nii.gz")
+data, affine = load_nifti(r"/home/ekin/Documents&code/datasets/hardi/training/training-data_DWIS_hardi-scheme_SNR-30.nii.gz")
+bvals, bvecs = read_bvals_bvecs(r"/home/ekin/Documents&code/datasets/hardi/training/hardi-scheme.bval", r"/home/ekin/Documents&code/datasets/hardi/training/hardi-scheme.bvec")
+mask, affine = load_nifti(r"/home/ekin/Documents&code/datasets/hardi/training-data_mask.nii.gz")
 
 gtab = gradient_table(bvals, bvecs)
+
 
 # infer response from mask
 response, ratio = response_from_mask_ssst(gtab, data, mask)
@@ -56,7 +57,7 @@ scene = window.Scene()
 evals = response[0]
 evecs = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]).T
 
-rho = 1
+rho = 0.5
 #fODF reconstruction
 csd_model = ConstrainedSphericalDeconvModel(gtab, response, sh_order=8)
 csd_fit = csd_model.fit(data)
@@ -69,7 +70,10 @@ order_sh = 8
 conversion_matrix = convert_to_mrtrix(order_sh)
 tournier_sh_coeff = np.dot(sh_coeff, conversion_matrix.T)
 
-from shm import mean_square_error, angular_correlation
+fods_img = nib.Nifti1Image(tournier_sh_coeff, affine)
+nib.save(fods_img, r"/home/ekin/Documents&code/datasets/hardi/training/training_csd.nii.gz")
+
+""" from shm import mean_square_error, angular_correlation
 ground_sh, _ = load_nifti(r"/home/ekin/Documents&code/datasets/disco1_ekin/DiSCo1_Strand_ODFs.nii.gz")
 ground_sh = ground_sh[:,:,:,0:sh_coeff.shape[3]]
 
@@ -87,7 +91,7 @@ for x in range(sh_coeff.shape[0]):
             if mask[x,y,z] == 0:
                 continue
             else:
-                ang_err_conventional[x,y,z] = get_angular_error(ground_sh[x,y,z,:], tournier_sh_coeff[x,y,z,:], order_sh)
+                ang_err_conventional[x,y,z] = get_angular_error(ground_sh[x,y,z,:], tournier_sh_coeff[x,y,z,:], order_sh) """
 
 #SH coefficients denoising
 #sh_coeff = average(sh_coeff)
@@ -125,7 +129,10 @@ new_sh_coeff = csd_fit2.shm_coeff
 conversion_matrix = convert_to_mrtrix(order_sh)
 tournier_new_sh_coeff = np.dot(new_sh_coeff, conversion_matrix.T)
 
-ang_err_modified = np.zeros([sh_coeff.shape[0], sh_coeff.shape[1], sh_coeff.shape[2]])
+fods_img = nib.Nifti1Image(tournier_new_sh_coeff, affine)
+nib.save(fods_img, r"/home/ekin/Documents&code/datasets/hardi/training/training_reg_csd.nii.gz")
+
+""" ang_err_modified = np.zeros([sh_coeff.shape[0], sh_coeff.shape[1], sh_coeff.shape[2]])
 i=0
 for x in range(sh_coeff.shape[0]):
     for y in range(sh_coeff.shape[1]):
@@ -135,13 +142,13 @@ for x in range(sh_coeff.shape[0]):
             if mask[x,y,z] == 0:
                 continue
             else:
-                ang_err_modified[x,y,z] = get_angular_error(ground_sh[x,y,z,:], tournier_new_sh_coeff[x,y,z,:], order_sh)
+                ang_err_modified[x,y,z] = get_angular_error(ground_sh[x,y,z,:], tournier_new_sh_coeff[x,y,z,:], order_sh) """
 
 """ fods_img = nib.Nifti1Image(tournier_new_sh_coeff, affine)
 nib.save(fods_img, "new_rho1.nii.gz") """
-
+""" 
 mse_modified = mean_square_error(tournier_new_sh_coeff, ground_sh, mask)
-acc_modified = angular_correlation(tournier_new_sh_coeff, ground_sh, mask)
+acc_modified = angular_correlation(tournier_new_sh_coeff, ground_sh, mask) """
 #ang_err_modified = get_angular_error(ground_sh, tournier_new_sh_coeff, order_sh)
 
 """ csd_odf = csd_fit.odf(sphere)
@@ -151,13 +158,13 @@ fodf_spheres = actor.odf_slicer(csd_odf[:,:,16:17,:], sphere=sphere, scale=1,
 scene.add(fodf_spheres)
 window.show(scene) """
 
-
+""" 
 print("MSE: " , mse_conventional)
 print("Regularized MSE: " , mse_modified)
 #print("Ang. Err.: ", ang_err_conventional)
 
 print("ACC: " , acc_conventional)
 print("Regularized ACC: " , acc_modified)
-#print("Ang. Err.: ", ang_err_modified)
+#print("Ang. Err.: ", ang_err_modified) """
 
 
